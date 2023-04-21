@@ -1,4 +1,4 @@
-# ADS1999-MicroPython-Module
+# ADS1299-x-MicroPython-Module
 
 <!--toc:start-->
 - [ToDo](#todo)
