@@ -1,6 +1,8 @@
 # ADS1299-x-MicroPython-Module
 
 <!--toc:start-->
+- [ADS1299-x-MicroPython-Module](#ads1299-x-micropython-module)
+- [Process diagram](#process-diagram)
 - [ToDo](#todo)
 - [References](#references)
 <!--toc:end-->
@@ -8,6 +10,9 @@
 This is a small Micropython module for configuring and using the Texas Instruments ADS1299 8-channel, 24-bit, low-noise analog-to-digital converter for biopotential measurements. This module has been developed with an ESP32 board as a master device.
 
 This module is under development, so some functions will be added soon.
+
+# Process diagram
+![sequence](doc/sequence.png "Sequence diagram")
 
 # ToDo
 - Modify the start up method `inti()` to configure data rate

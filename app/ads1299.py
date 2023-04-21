@@ -20,7 +20,10 @@ def uint_to_int(unsigned_int, number_of_bits):
 
 
 class ADS1299:
-    """docstring for ADS"""
+    """This class is used to control the ADS1299,
+       the parame that need is the spi channel and
+       chip select pin.
+    """
     """
     Commands definitions
     """
@@ -249,9 +252,9 @@ class ADS1299:
         pass
 
     def read_channels_continuous(self):
-        """This method continuously reads the data from all 
+        """This method continuously reads the data from all
         channels without sending a command.
-        :returns: A list of the data read from each channel 
+        :returns: A list of the data read from each channel
         in continuous mode.
 
         """
@@ -276,4 +279,3 @@ class ADS1299:
         self.send_command(ADS1299.SDATAC)
         self.send_command(ADS1299.STOP)
         pass
-
