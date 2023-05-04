@@ -1,8 +1,9 @@
 from utime import sleep_ms
 
 
-def uint_to_int(unsigned_int, number_of_bits):
-    """This funcito nconverts an unsigned integer to a signed integer.
+def uint_to_int(unsigned_int, number_of_bits=24):
+    """This funciton converts an unsigned integer to a signed integer
+       by default it uses 24 bits.
 
     :unsigned_int: Number to is going to be converted.
     :number_of_bits: Number of bits to be used.
@@ -82,20 +83,34 @@ class ADS1299:
         self.cs = cs
         self.spi_channel = spi_channel
 
-    def init(self):
-        """This method initializes the ADS1299.
+    def init(self, config1=0x96, config2=0xC0, config3=0xE0):
+        """This method initializes the ADS1299, with 250 S/s, use internal
+           reference and do not use the internal signal for testing. For change
+           this configuration please check 9.6 Register Maps section of the
+           datasheet.
+
+        :config1: This register configures the DAISY_EN bit, clock, and data
+                  rate.
+        :config2: This register configures the test signal generation. See the
+                  Input Multiplexer section for more details.
+        :config3: Configuration register 3 configures either an internal or
+                  exteral reference and BIAS operation.
         :returns: None
 
         """
-
         self.cs.on()
         self.send_command(ADS1299.SDATAC)
         self.send_command(ADS1299.SDATAC)
         self.send_command(ADS1299.STOP)
-        self.write_register(ADS1299.CONFIG3, 1, 0xE0)  # Set internal reference
+        # Set internal reference
+        self.write_register(ADS1299.CONFIG3, 1, config3)
+        # Set internal reference
+        self.write_register(ADS1299.CONFIG1, 1, config1)
+        # Set internal reference
+        self.write_register(ADS1299.CONFIG2, 1, config2)
+        # Set internal reference
         self.read_all_registers()
         sleep_ms(4)
-
         pass
 
     def send_command(self, command):

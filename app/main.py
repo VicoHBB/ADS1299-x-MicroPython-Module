@@ -28,18 +28,22 @@ ads.enable_read_continuous()       # Enable continuous reading
 
 while True:
 
-    for i in range(256):
+    for i in range(250):
         # Take a reading from the ADS1299
         channels = ads.read_channels_continuous()
         # Store the reading in the dictionary
         for i in range(8):
             dictionary[f'Ch{i}'].append(channels[i])
         # Wait 4 ms
-        sleep_ms(4)
+        sleep_ms(8)
 
     # This sectiion creates a JSON string to post via WIFI
     # but ins this code just creates string
     jsonString = json.dumps(dictionary)
+    # To see the signals we're gonna create a file a print the content of this
+    jsonFile = open("signals.json", "w")
+    jsonFile.write(jsonString)
+    jsonFile.close()
 
     # Clear the dictionary
     for i in range(8):
