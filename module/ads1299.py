@@ -134,6 +134,7 @@ class ADS1299:
     GAIN_24 = 0b110
     NO_GAIN = 0b111
     # MUXr Values
+    NORMAL = 0b000  # Normal electrode input.
     SHORTED = 0b001  # Input shorted (for offset or noise measurement).
     BIAS_MEAS = 0b010  # Used in conjunction with BIAS_MEAS bit for BIAS meas.
     MVDD = 0b011  # MVDD for supply measurement.

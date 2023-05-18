@@ -69,8 +69,8 @@ for i in range(250):
     for j in range(8, 16):
         dictionary[f'Ch{j}'].append(channels_8_15[j-8])
 
-    # Wait 4 ms
-    sleep_ms(1)
+    # Wait 1 ms
+    sleep_ms(4)
 
 # This sectiion creates a JSON string to post via WIFI
 # but ins this code just creates string

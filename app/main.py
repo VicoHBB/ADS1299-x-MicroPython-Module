@@ -1,7 +1,7 @@
 from machine import Pin, freq, SPI
 from utime import sleep_ms
 from ads1299 import ADS1299
-from ads1299 import make_config3
+from ads1299 import make_config1, make_config3
 import json
 
 # Set the CPU frequency to 240Mhx
@@ -14,10 +14,12 @@ spi = SPI(1, 4000000, polarity=0, phase=1, bits=8,
 ads = ADS1299(cs, spi)
 
 
+# Set 500 of sample rate
+cf1 = make_config1(data_rate=ADS1299.SAMPLE_RATE_500)
 # Set internal reference
 cf3 = make_config3(pwr_down_refbuf=True)
 
-ads.init(config3=cf3)  # ADS1299 startup routine
+ads.init(config1=cf1,config3=cf3)  # ADS1299 startup routine
 
 ads.config_all_channels(
     channels_active=8, gain=ADS1299.GAIN_2, channel_input=ADS1299.NORMAL)
@@ -40,8 +42,8 @@ while True:
         # Store the reading in the dictionary
         for i in range(8):
             dictionary[f'Ch{i}'].append(channels[i])
-        # Wait 4 ms
-        sleep_ms(8)
+        # Wait 1 ms
+        sleep_ms(1)
 
     # This sectiion creates a JSON string to post via WIFI
     # but ins this code just creates string

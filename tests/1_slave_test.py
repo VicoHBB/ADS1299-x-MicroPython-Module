@@ -1,7 +1,7 @@
 from machine import Pin, freq, SPI
 from utime import sleep_ms
 from ads1299 import ADS1299
-from ads1299 import make_config3, make_chnset
+from ads1299 import make_config3
 # from ads1299 import make_chnset
 import json
 
@@ -55,7 +55,7 @@ for i in range(250):
     for i in range(8):
         dictionary[f'Ch{i}'].append(channels_config[i])
     # Wait 4 ms
-    sleep_ms(8)
+    sleep_ms(1)
 
 # This sectiion creates a JSON string to post via WIFI
 # but ins this code just creates string
