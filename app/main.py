@@ -1,6 +1,7 @@
 from machine import Pin, freq, SPI
 from utime import sleep_ms
 from ads1299 import ADS1299
+from ads1299 import make_config3
 import json
 
 # Set the CPU frequency to 240Mhx
@@ -12,14 +13,19 @@ spi = SPI(1, 4000000, polarity=0, phase=1, bits=8,
           firstbit=SPI.MSB, sck=Pin(14), mosi=Pin(13), miso=Pin(12))
 ads = ADS1299(cs, spi)
 
-cs.on()                            # Enable the communication
 
-ads.init()                         # ADS1299 startup routine
-ads.config_channels(7, 1, 0, 0x0)  # Set the configuration of channels 7 and 1
+# Set internal reference
+cf3 = make_config3(pwr_down_refbuf=True)
 
-# Read the channel register to check for correct writing
-for i in range(8):
-    ads.read_register(ADS1299.CH1SET + i, 1)
+ads.init(config3=cf3)  # ADS1299 startup routine
+
+ads.config_all_channels(
+    channels_active=8, gain=ADS1299.GAIN_2, channel_input=ADS1299.NORMAL)
+
+# Read the channel registers to check for correct writing
+# regs = ads.read_all_registers()
+# for i in regs:
+#     print(hex(i))
 
 # create a dictionary to store the data
 dictionary = {f'Ch{i}': [] for i in range((8))}

@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import json
 
-jsonFile = open("signals.json")
+jsonFile = open("tests/signals.json")
+
 channels = json.load(jsonFile)
 
 for i in range(len(channels)):
