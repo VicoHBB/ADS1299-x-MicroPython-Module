@@ -36,4 +36,5 @@ rs:
 
 clean:
 	ampy -p $(PORT) rm main.py
+	ampy -p $(PORT) rm ads1299.py
 

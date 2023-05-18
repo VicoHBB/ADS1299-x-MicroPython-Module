@@ -57,7 +57,7 @@ ads2.enable_read_continuous()       # Enable continuous reading for ads2
 """
 RUN ONE TIME
 """
-for i in range(250):
+for i in range(200):
     # Take a reading from the ADS1299's
     channels_0_7 = ads1.read_channels_continuous()
     channels_8_15 = ads2.read_channels_continuous()
@@ -70,7 +70,7 @@ for i in range(250):
         dictionary[f'Ch{j}'].append(channels_8_15[j-8])
 
     # Wait 1 ms
-    sleep_ms(4)
+    sleep_ms(1)
 
 # This sectiion creates a JSON string to post via WIFI
 # but ins this code just creates string
