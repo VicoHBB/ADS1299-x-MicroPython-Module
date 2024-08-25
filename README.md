@@ -35,12 +35,11 @@ This is a small `MicroPython` module for configuring and using the Texas Instrum
 ## Before implement it
 1. First and foremost, please review the [ADS1299 Datasheet](https://www.ti.com/lit/ds/symlink/ads1299.pdf?ts=1680289538117&ref_url=https%253A%252F%252Fwww.ti.com%252Fproduct%252FADS1299%253Futm_source%253Dgoogle%2526utm_medium%253Dcpc%2526utm_campaign%253Dasc-null-null-GPN_EN-cpc-pf-google-wwe%2526utm_content%253DADS1299%2526ds_k%253DADS1299%2526DCM%253Dyes%2526gclsrc%253Dds%2526gclsrc%253Dds) to learn more about the integrated circuit, its limitations, configurations. Please focus on following sections:
 
-    * **Section 7.7: Switching Characteristics: Serial Interface** on page 12 is important to review, especially the following note:
+    * **Section 7.7: Switching Characteristics: Serial Interface** on page `12` is important to review, especially the following note:
 
-    > [!NOTE]
     > SPI settings are CPOL = 0 and CPHA = 1.
 
-    **Section 9.6: Register Maps** on page `44` of the datasheet to learn how to configure the registers. The module makes it easy to handle this configuration, but please ensure you choose the best settings based on your specific needs. For a quick consult you can find [Register Maps](./docs/Register_Maps.png) on docs.
+    * **Section 9.6: Register Maps** on page `44` of the datasheet to learn how to configure the registers. The module makes it easy to handle this configuration, but please ensure you choose the best settings based on your specific needs. For a quick consult you can find [Register Maps](./docs/Register_Maps.png) on docs.
 
 2. For the second step, please refer to the [EEG Front-End Performance Demonstration Kit](https://www.ti.com/lit/ug/slau443b/slau443b.pdf?ts=1680289719540&ref_url=https%253A%252F%252Fwww.google.com%252F) to understand the board configuration and all its connections. In this document, you will find the following diagram:
 
