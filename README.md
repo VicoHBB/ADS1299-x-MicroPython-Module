@@ -119,19 +119,19 @@ make test1 # If you just want to test two slaves connected
 
 * `make test1`: The `1_slave_test.py` test script is designed to test the functionality of the ADS1299 ADC driver with a single slave device (ADS1299).
 
-- Flashes the `ads1299.py` module to the MicroPython board using the `ampy` tool.
-- Runs the `1_slave_test.py` test script on the MicroPython board.
-- Copies the `signals.json` file from the Pyboard to the local machine using `rshell`.
-- Runs a Python script (`plot.py`) to plot the data from the `signals.json` file.
-- Removes the `signals.json` file from the local machine.
+    - Flashes the `ads1299.py` module to the MicroPython board using the `ampy` tool.
+    - Runs the `1_slave_test.py` test script on the MicroPython board.
+    - Copies the `signals.json` file from the Pyboard to the local machine using `rshell`.
+    - Runs a Python script (`plot.py`) to plot the data from the `signals.json` file.
+    - Removes the `signals.json` file from the local machine.
 
 * `make test2`: The `2_slaves_test.py` test script is designed to test the functionality of the ADS1299 ADC driver with multiple slave devices (ADS1299s).
 
-- Flashes the `ads1299.py` module to the MicroPython board using the `ampy` tool.
-- Runs the `2_slaves_test.py` test script on the MicroPython board.
-- Copies the `signals.json` file from the Pyboard to the local machine using `rshell`.
-- Runs a Python script (`plot.py`) to plot the data from the `signals.json` file.
-- Removes the `signals.json` file from the local machine.
+    - Flashes the `ads1299.py` module to the MicroPython board using the `ampy` tool.
+    - Runs the `2_slaves_test.py` test script on the MicroPython board.
+    - Copies the `signals.json` file from the Pyboard to the local machine using `rshell`.
+    - Runs a Python script (`plot.py`) to plot the data from the `signals.json` file.
+    - Removes the `signals.json` file from the local machine.
 
 Both `test1` and `test2` recipes are useful for testing the ADS1299 ADC driver with different scenarios, such as single-slave or multiple-slave configurations. The test scripts (`1_slave_test.py` and `2_slaves_test.py`) should be implemented in the `tests/` directory, and the `plot.py` script should be implemented in the same directory to visualize the test results.
 
