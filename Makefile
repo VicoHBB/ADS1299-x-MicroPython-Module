@@ -38,3 +38,14 @@ clean:
 	ampy -p $(PORT) rm main.py
 	ampy -p $(PORT) rm ads1299.py
 
+help:
+	@echo "### HELP ###"
+	@echo "make all   -> Runs the rs and run recipes."
+	@echo "make run   -> Uploads the ads1299.py and just run main.py file to the Pyboard.py script."
+	@echo "make list  -> Lists all files on the Pyboard."
+	@echo "make flash -> Resets the Pyboard and uploads the ads1299.py and main.py files."
+	@echo "make test1 -> Execute test for one slave."
+	@echo "make test2 -> Execute test for two slaves."
+	@echo "make repl  -> Connects to the Pyboard's REPL and start it."
+	@echo "make rs    -> Resets the Pyboard."
+	@echo "make clean -> Removes the main.py and ads1299.py files from the Pyboard."
