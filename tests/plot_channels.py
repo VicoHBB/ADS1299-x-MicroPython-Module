@@ -4,8 +4,8 @@ import json
 with open("tests/signals.json", "r") as json_file:
     channels = json.load(json_file)
 
-# Filter channels that contain data to determine how many subplots to create
-active_channels = [k for k, v in channels.items() if v]
+# Filter channels that contain data and sort them numerically
+active_channels = sorted([k for k, v in channels.items() if v], key=lambda x: int(x[2:]))
 num_plots = len(active_channels)
 
 # Create a single figure with N subplots (stacked vertically)
@@ -18,11 +18,10 @@ if num_plots > 0:
 
     for i, channel_name in enumerate(active_channels):
         data = channels[channel_name]
-        display_name = f"Ch{i}"
 
-        axes[i].plot(data, label=display_name, color='tab:blue')
+        axes[i].plot(data, label=channel_name, color='tab:blue')
         axes[i].set_ylabel("Amp")
-        axes[i].set_title(display_name, loc='left', fontsize=10)
+        axes[i].set_title(channel_name, loc='left', fontsize=10)
         axes[i].legend(loc="upper right")
         axes[i].grid(True, alpha=0.3)
 

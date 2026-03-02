@@ -1,7 +1,7 @@
 # Import necessary modules
 from machine import Pin, freq, SPI
 from utime import sleep_ms
-from module.ads1299 import ADS1299, make_config3
+from module.ads1299 import ADS1299, make_config1, make_config3
 import json
 
 # Set the CPU frequency to 240Mhx
@@ -10,23 +10,25 @@ freq(240000000)
 
 # Declare CS (Chip Select) Pin for the ADS1299
 cs = Pin(5, Pin.OUT, value=1)
-
 # Declare DRDY (Data Ready) Pin for synchronization
 drdy = Pin(4, Pin.IN)
 
 # Configure SPI communication with the ADS1299
 # SPI settings are CPOL = 0 and CPHA = 1
-spi = SPI(2, baudrate=4000000, polarity=0, phase=1, bits=8,
+spi = SPI(2, baudrate=16000000, polarity=0, phase=1, bits=8,
           firstbit=SPI.MSB, sck=Pin(18), mosi=Pin(23), miso=Pin(19))
 
 # Initialize the ADS1299 with the configured SPI and CS pins
 ads = ADS1299(cs, spi)
 
+# Set the samples rate to 500sps
+cf1 = make_config1(data_rate=ADS1299.SAMPLE_RATE_16K)
+
 # Set the internal reference buffer to power down mode
 cf3 = make_config3(pwr_down_refbuf=True)
 
 # Initialize the ADS1299 with the configuration settings
-ads.init(config3=cf3)
+ads.init(config1=cf1,config3=cf3)
 
 # Configure all channels to be active, with a gain of 2 and normal input
 ads.config_all_channels(
@@ -53,27 +55,42 @@ for i in regs:
 
 # Create a dictionary to store the data from each channel
 dictionary = {f'Ch{i}': [] for i in range(8)}
+# Pre-extramos las referencias a las listas para máxima velocidad
+channel_list = tuple(dictionary[f'Ch{i}'] for i in range(8))
 
+print("Test read_continuous")
 # Enable continuous reading from the ADS1299
 ads.enable_read_continuous()
 
-# Run this section only once to collect a sample set of data
-for i in range(250):
+#Take 1000 samples
+for sample in range(500):
 
     # Wait for DRDY pin to go LOW (indicates data is ready)
     while drdy.value():
         pass
 
     # Read the channels continuously from the ADS1299
-    channels_config = ads.read_channels_continuous()
-    # Store the reading from each channel in the dictionary
+    _, channels_data = ads.read_channels_continuous()
+
     for i in range(8):
-        dictionary[f'Ch{i}'].append(channels_config[i])
+        channel_list[i].append(channels_data[i])
+
+# print("Test read_channels_once:")
+# for i in range(500):
+#     # Wait for DRDY pin to go LOW (indicates data is ready)
+#     while drdy.value():
+#         pass
+#
+#     # Read the channels once from the ADS1299
+#     _, channels_data = ads.read_channels_once()
+#
+#     for j in range(8):
+#         channel_list[j].append(channels_data[j])
 
 
 print(dictionary) # View data
 
-# Guardar los datos en el archivo JSON de forma eficiente
+# Store data in a json file, this is just for plot it
 with open("signals.json", "w") as jsonFile:
     json.dump(dictionary, jsonFile)
 

@@ -1,24 +1,27 @@
-from utime import sleep_ms, sleep_us
 from micropython import const
+from machine import Pin, SPI
+from utime import sleep_ms, sleep_us
 
+_LIMIT = const(1 << 24)
+_SIGN_BIT = const(1 << 23)
+_24B_MASK = const(0xFFFFFF)
 
-def uint_to_int(unsigned_int, number_of_bits=24):
-    """This funciton converts an unsigned integer to a signed integer
-       by default it uses 24 bits.
+def uint_to_int(value: int ) -> int:
+    """This funciton converts an unsigned integer to a signed integer default it uses 24 bits refer to ads1299
+       datasheet for more info.
 
-    :unsigned_int: Number to is going to be converted.
-    :number_of_bits: Number of bits to be used.
+    :value: Number to is going to be converted.
     :returns: Number converted to signed integer.
 
     """
-    # check if the unsigned integer is negative
-    if unsigned_int >> (number_of_bits - 1):
+    value &= _24B_MASK # Applies a mask for only 24 bits
+
+    # check if the unsigned integer is negative (bit 23)
+    if value & _SIGN_BIT:
         # calculate the two's complement representation of the negative value
-        signed_int = -((unsigned_int ^ ((1 << number_of_bits) - 1)) + 1)
-    else:
-        # unsigned integer is positive, so no need to convert
-        signed_int = unsigned_int
-    return signed_int
+        return value - _LIMIT
+
+    return value
 
 
 class ADS1299:
@@ -145,12 +148,14 @@ class ADS1299:
     BIAS_DRN = const(0b111)  # Negative electrode is the driver
     """"""
 
-    def __init__(self, cs, spi_channel):
+    def __init__(self, cs: Pin, spi_channel: SPI):
         self.cs = cs
         self.spi_channel = spi_channel
+        # @HACK: This avoid create multiple bytearrays from repeated bytearray allocations during data rx
+        self.data_rx = bytearray(27)
 
-    def init(self, config1=0x96, config2=0xC0, config3=0x60):
-        """ This method initializes the ADS1299, with 250 S/s, use internal
+    def init(self, config1: int = 0x96, config2: int = 0xC0, config3: int = 0x60) -> None:
+        """This method initializes the ADS1299, with 250 S/s, use internal
         reference and do not use the internal signal for testing. For change
         this configuration please check 9.6 Register Maps section of the
         datasheet.
@@ -177,68 +182,81 @@ class ADS1299:
         sleep_ms(4)
         pass
 
-    def send_command(self, command):
-        """ Send a unique command trowgh SPI channel.
+    def send_command(self, command: int) -> None:
+        """Send a unique command trowgh SPI channel.
 
         :command: Command extractd from the data sheet to control ADS1299.
         :returns: None
 
         """
         self.cs.off()
-        self.spi_channel.write(chr(command))
+        self.spi_channel.write(bytearray([command]))
+        sleep_us(10)  # Wait to execute command (tSCCS )
         self.cs.on()
+        sleep_us(10)  # Wait to next command (tSDECODE)
         pass
 
-    def write_reg(self, register, data_to_write):
-        """ This method write data to a single register.
+    def write_reg(self, register: int, data_to_write: int) -> None:
+        """This method write data to a single register.
 
         :register: Register to be written.
         :data_to_write: Value of the register that is going to be write.
         :returns: None
 
         """
-        data = [(ADS1299.WREG | register), 0, data_to_write]
-        txdata = bytearray(data)
-        rxdata = bytearray(len(txdata))
-        self.cs.off()
-        self.spi_channel.write_readinto(txdata, rxdata)
-        self.cs.on()
+        self.write_registers(register, [data_to_write])
 
         pass
 
-    def write_registers(self, starting_register, data_to_write=[]):
-        """ This method write data to multiple registers one by one.
+    def write_registers(self, starting_register: int, data_to_write: list[int] = []) -> None:
+        """This method write data to multiple registers one by one.
 
         :starting_register: Register to be reading from.
         :data_to_write: A list that contains the data to be written.
         :returns: None
 
         """
-        for i in data_to_write:
-            self.write_reg(starting_register, i)
-            starting_register += 1
-            sleep_us(1)    # Wait a little for the data to be written.
+        n = len(data_to_write)
+
+        if n == 0:
+            return  # Do nothing
+
+        self.cs.off()
+        # Send first byte [ WREG + Addr ]
+        self.spi_channel.write(bytearray([ADS1299.WREG | starting_register]))
+        sleep_us(6)  # Wait to next command (tSDECODE)
+
+        # Send second byte number of registers [ n - 1 ]
+        self.spi_channel.write(bytearray([n - 1]))
+        sleep_us(6)  # Wait to next command (tSDECODE)
+
+        # Send data one by one
+        for val in data_to_write:
+            self.spi_channel.write(bytearray([val]))
+            sleep_us(4)  # Gap between data bytes
+
+        sleep_us(6)  # Wait to execute command (tSCCS )
+        self.cs.on()
+        sleep_us(10)
 
         pass
 
-    def read_reg(self, register):
-        """ This method read a single register.
+    def read_reg(self, register: int) -> int | None:
+        """This method read a single register.
 
         :register: Register to be read.
-        :returns: Content of the n registers.
+        :returns: Content of the n registers or None is something wrong.
 
         """
-        data = [(ADS1299.RREG | register), 0, 0x00]
-        txdata = bytearray(data)
-        rxdata = bytearray(len(txdata))
-        self.cs.off()
-        self.spi_channel.write_readinto(txdata, rxdata)
-        self.cs.on()
+        reg_data = self.read_registers(register, 1)
 
-        return rxdata[2]
+        if not reg_data:
+            return None
 
-    def read_registers(self, starting_register, number_of_registers):
-        """ This method read data from multiple registers one by one.
+        return reg_data[0]
+
+    def read_registers(self, starting_register: int, number_of_registers: int) -> list[int]:
+        """This method read data from multiple registers one by one.
 
         :starting_register: Register to be reading from.
         :number_of_registers: Number of registers to be read.
@@ -246,13 +264,28 @@ class ADS1299:
 
         """
         registers_list = []
-        for i in range(number_of_registers):
-            registers_list.append(self.read_reg(starting_register+i))
+
+        self.cs.off()
+        # Send first byte [ WREG + Addr ]
+        self.spi_channel.write(bytearray([ADS1299.RREG | starting_register]))
+        sleep_us(6)
+
+        # Send second byte number of registers [ n - 1 ]
+        self.spi_channel.write(bytearray([number_of_registers - 1]))
+        sleep_us(10)  # Wait for the answare
+
+        for _ in range(number_of_registers):
+            byte = self.spi_channel.read(1, 0x00)  # Read one byte
+            registers_list.append(byte[0])
+            sleep_us(4)  # Gap between data bytes
+
+        sleep_us(6)  # Wait to execute command (tSCCS )
+        self.cs.on()
 
         return registers_list
 
-    def read_all_registers(self):
-        """ This method read all the register values from the starting of the
+    def read_all_registers(self) -> list[int]:
+        """This method read all the register values from the starting of the
         ADS1299
 
         :returns: A list with the value of all registers of ADS1299.
@@ -263,13 +296,12 @@ class ADS1299:
 
         return registers_list
 
-    def config_all_channels(self, channels_active=8, gain=GAIN_24,
-                            srb2_connection=False,
-                            channel_input=SHORTED):
-        """ Assuming all channels will be seted, this method enables all
-        channels, configuring gain, SRB2 connection, and multiplexing.
+    def config_all_channels(self, channels_active: int = 8, gain: int = GAIN_24, srb2_connection: bool = False,
+                            channel_input: int = SHORTED) -> None:
+        """Assuming all channels will be seted, this method enables all
+            channels_active, configuring gain, SRB2 connection, and multiplexing.
 
-        :channels: Number of channels to be used, you can set 1 to 8 if you set
+        :channels_active: Number of channels to be used, you can set 1 to 8 if you set
                    0, all will be disabled.
         :gain: This determine the PGA gain setting could be:
             GAIN_1  -> 1
@@ -296,80 +328,93 @@ class ADS1299:
 
         """
 
-        chnset = (0 << 7) \
-            | (gain << 4) \
-            | (srb2_connection << 3) \
-            | channel_input
+        # 1. Byte for active channels
+        # Bit 7 = 0 (Normal operation)
+        chnset_active = (0 << 7) | (gain << 4) | (srb2_connection << 3) | channel_input
 
-        self.write_registers(ADS1299.CH1SET, [chnset] * channels_active)
+        # 2. Byte for inactive channels
+        # Bit 7 = 1 (Power-down)
+        # Bits 2-0 = 001 (Input Shorted) <- Recommended to avoid noise
+        chnset_inactive = (1 << 7) | (0x01)
 
-        self.write_registers(ADS1299.CH1SET + channels_active,
-                             [(0x01 << 7)] * (8 - channels_active))
+        # 3. Create a list with both configs and send it
+        config_buffer = ([chnset_active] * channels_active) + ([chnset_inactive] * (8 - channels_active))
+        self.write_registers(ADS1299.CH1SET, config_buffer)
 
         pass
 
-    def read_channels_once(self):
-        """ This method reads the data from all channels only one time
+    def read_channels_once(self) -> tuple[list[int], list[int]]:
+        """This method performs a single read of the status word and all channel data.
 
-        :returns: A list of the data read from each channel
+        :return: A tuple containing a list of 3 status bytes and a list of 8 channel samples.
 
         """
-
-        data = []
-        channels = []
-
-        data.append(ADS1299.RDATA)
-        for i in range(27):
-            data.append(0)
-
-        txdata = bytearray(data)
-        rxdata = bytearray(len(txdata))
+        status_registers = []
 
         self.cs.off()
-        self.spi_channel.write_readinto(txdata, rxdata)
+        self.spi_channel.write(bytearray([ADS1299.RDATA]))
+
+        sleep_us(6)  # Wait to next command (tSDECODE)
+
+        # Write on self.data_rx pre-assigned to avoid create multiple objects
+        self.spi_channel.readinto(self.data_rx, 0x00)
+        sleep_us(6)  # Wait to execute command (tSCCS)
         self.cs.on()
 
-        for i in range(9):
-            channels.append(uint_to_int(int.from_bytes(
-                rxdata[(i * 3): ((i*3) + 3)], 'big'), 24))
+        mv = memoryview(self.data_rx)
 
-        return channels[1:9]
+        # Status (bytes 0, 1, 2)
+        status_registers = list(mv[0:3])
 
-    def enable_read_continuous(self):
-        """ This method enables continuous reading of the data.
+        # Channesl data (bytes 3-26)
+        channels = [0] * 8
+        for i in range(8):
+            start = 3 + i * 3
+            raw_value = (mv[start] << 16) | (mv[start + 1] << 8) | mv[start + 2]
+            channels[i] = uint_to_int(raw_value)
+
+        return status_registers, channels
+
+
+    def enable_read_continuous(self) -> None:
+        """This method enables continuous reading of the data.
         :returns: None
 
         """
         self.send_command(ADS1299.START)
         self.send_command(ADS1299.RDATAC)
         # This delay is calculated from the datasheet correponding to
-        # 4 t CLK cycles
-        sleep_ms(16)
+        # 4 t CLK cycles this is 1.96us, but looks like does not work with 2us
+        sleep_us(10)
 
         pass
 
-    def read_channels_continuous(self):
-        """ This method continuously reads the data from all
-        channels without sending a command.
-        :returns: A list of the data read from each channel
+    def read_channels_continuous(self) -> tuple[list[int], list[int]]:
+        """This method continuously reads the data from all channels affter enable continuous read.
+        :returns: A tuple containing a list of 3 status bytes and a list of 8 channel samples.
         in continuous mode.
 
         """
-        data_rx = bytearray(27)
-        channels = []
-
         self.cs.off()
-        self.spi_channel.readinto(data_rx, 0x00)
+        self.spi_channel.readinto(self.data_rx, 0x00)
+        sleep_us(6)  # Wait to execute command (tSCCS)
         self.cs.on()
 
-        for i in range(9):
-            channels.append(uint_to_int(int.from_bytes(
-                data_rx[(i*3):((i*3)+3)], 'big'), 24))
+        mv = memoryview(self.data_rx)
+        # Status (bytes 0, 1, 2)
+        status_registers = list(mv[0:3])
 
-        return channels[1:9]
+        # Canales (bytes 3-26)
+        channels = [0] * 8
+        for i in range(8):
+            start = 3 + i * 3
+            raw_value = (mv[start] << 16) | (mv[start + 1] << 8) | mv[start + 2]
+            channels[i] = uint_to_int(raw_value)
 
-    def disable_read_continuous(self):
-        """ Disable continuous reading of the data.
+        return status_registers, channels
+
+    def disable_read_continuous(self) -> None:
+        """Disable continuous reading of the data.
         :returns: None
 
         """
@@ -378,9 +423,8 @@ class ADS1299:
         pass
 
 
-def make_config1(daisy_en=False, clock_en=False,
-                 data_rate=ADS1299.SAMPLE_RATE_250):
-    """ This register configures the DAISY_EN bit, clock, and data rate.
+def make_config1(daisy_en: bool = False, clock_en: bool = False, data_rate: int = ADS1299.SAMPLE_RATE_250) -> int:
+    """This register configures the DAISY_EN bit, clock, and data rate.
 
     This function creates the value to be written in the CONFIG1 register of
     the ADS1299, it only generates the value, this must be assigned in the
@@ -403,16 +447,11 @@ def make_config1(daisy_en=False, clock_en=False,
 
     """
 
-    return (0x1 << 7) \
-        | (daisy_en << 6) \
-        | (clock_en << 5) \
-        | (0x2 << 3) \
-        | data_rate
+    return (0x1 << 7) | (daisy_en << 6) | (clock_en << 5) | (0x2 << 3) | data_rate
 
 
-def make_config2(self, test_source=False, signal_amp=1,
-                 signal_freq=ADS1299.PULSED_1):
-    """ This register configures the test signal generation. See the Input
+def make_config2(test_source: bool = False, signal_amp: int = 1, signal_freq: int = ADS1299.PULSED_1) -> int:
+    """This register configures the test signal generation. See the Input
     Multiplexer section of datasheet for more details.
 
     This function creates the value to be written in the CONFIG2 register of
@@ -438,17 +477,13 @@ def make_config2(self, test_source=False, signal_amp=1,
 
     """
 
-    return (0x06 << 5) \
-        | (test_source << 4) \
-        | (0x00 << 3) \
-        | ((signal_amp - 1) << 2) \
-        | signal_freq
+    return (0x06 << 5) | (test_source << 4) | (0x00 << 3) | ((signal_amp - 1) << 2) | signal_freq
 
 
-def make_config3(pwr_down_refbuf=False, bias_meas=False, biasref_signal=False,
-                 bias_buf_pwr=False, bias_sense_func=False,
-                 bias_lead_off_status=False):
-    """ Configuration register 3 configures either an internal or exteral
+def make_config3(pwr_down_refbuf: bool = False, bias_meas: bool = False, biasref_signal: bool = False,
+                 bias_buf_pwr: bool = False, bias_sense_func: bool = False,
+                 bias_lead_off_status: bool = False) -> int:
+    """Configuration register 3 configures either an internal or exteral
     reference and BIAS operation.
 
     This function creates the value to be written in the CONFIG3 register of
@@ -481,18 +516,20 @@ def make_config3(pwr_down_refbuf=False, bias_meas=False, biasref_signal=False,
 
     """
 
-    return (pwr_down_refbuf << 7) \
-        | (0x03 << 5) \
-        | (bias_meas << 4) \
-        | (biasref_signal << 3) \
-        | (bias_buf_pwr << 2) \
-        | (bias_sense_func << 1) \
+    return (
+        (pwr_down_refbuf << 7)
+        | (0x03 << 5)
+        | (bias_meas << 4)
+        | (biasref_signal << 3)
+        | (bias_buf_pwr << 2)
+        | (bias_sense_func << 1)
         | bias_lead_off_status
+    )
 
 
-def make_loff(comp_th=ADS1299.COMP_95P_5N, ilead_off=ADS1299.I_6NA,
-              flead_off=ADS1299.DC_LOFF):
-    """ The lead-off control register configures the lead-off detection
+def make_loff(comp_th: int = ADS1299.COMP_95P_5N, ilead_off: int = ADS1299.I_6NA,
+              flead_off: int = ADS1299.DC_LOFF) -> int:
+    """The lead-off control register configures the lead-off detection
     operation.
 
     This function creates the value to be written in the LOFF register of
@@ -529,14 +566,12 @@ def make_loff(comp_th=ADS1299.COMP_95P_5N, ilead_off=ADS1299.I_6NA,
 
     """
 
-    return (comp_th << 5) \
-        | (ilead_off << 2) \
-        | (flead_off)
+    return (comp_th << 5) | (ilead_off << 2) | (flead_off)
 
 
-def make_chnset(power_down=False, gain=ADS1299.GAIN_24, srb2_connection=False,
-                channel_input=ADS1299.SHORTED):
-    """ The CH[1:8]SET control register configures the power mode, PGA gain,
+def make_chnset(power_down: bool = False, gain: int = ADS1299.GAIN_24, srb2_connection: bool = False,
+                channel_input: int = ADS1299.SHORTED) -> int:
+    """The CH[1:8]SET control register configures the power mode, PGA gain,
     and multiplexer settings channels. See the Input Multiplexer section for
     details of datasheet. CH[2:8]SET are similar to CH1SET, corresponding to
     the respective channels.
@@ -577,15 +612,12 @@ def make_chnset(power_down=False, gain=ADS1299.GAIN_24, srb2_connection=False,
 
     """
 
-    return ((power_down) << 7) \
-        | (gain << 4) \
-        | (srb2_connection << 3) \
-        | channel_input
+    return ((power_down) << 7) | (gain << 4) | (srb2_connection << 3) | channel_input
 
 
-def make_bias_sensp(biasp8_bit=False, biasp7_bit=False, biasp6_bit=False,
-                    biasp5_bit=False, biasp4_bit=False, biasp3_bit=False,
-                    biasp2_bit=False, biasp1_bit=False):
+def make_bias_sensp(biasp8_bit: bool = False, biasp7_bit: bool = False, biasp6_bit: bool = False,
+                    biasp5_bit: bool = False, biasp4_bit: bool = False, biasp3_bit: bool = False,
+                    biasp2_bit: bool = False, biasp1_bit: bool = False) -> int:
     """ This register controls the selection of the positive signals from each
     channel for bias voltage (BIAS) derivation. See the Bias Drive
     (DC Bias Circuit) section of datasheet for details.
@@ -608,19 +640,21 @@ def make_bias_sensp(biasp8_bit=False, biasp7_bit=False, biasp6_bit=False,
 
     """
 
-    return (biasp8_bit << 7) \
-        | (biasp7_bit << 6) \
-        | (biasp6_bit << 5) \
-        | (biasp5_bit << 4) \
-        | (biasp4_bit << 3) \
-        | (biasp3_bit << 2) \
-        | (biasp2_bit << 1) \
+    return (
+        (biasp8_bit << 7)
+        | (biasp7_bit << 6)
+        | (biasp6_bit << 5)
+        | (biasp5_bit << 4)
+        | (biasp4_bit << 3)
+        | (biasp3_bit << 2)
+        | (biasp2_bit << 1)
         | (biasp1_bit << 0)
+    )
 
 
-def make_bias_sensn(biasn8_bit=False, biasn7_bit=False, biasn6_bit=False,
-                    biasn5_bit=False, biasn4_bit=False, biasn3_bit=False,
-                    biasn2_bit=False, biasn1_bit=False):
+def make_bias_sensn(biasn8_bit: bool = False, biasn7_bit: bool = False, biasn6_bit: bool = False,
+                    biasn5_bit: bool = False, biasn4_bit: bool = False, biasn3_bit: bool = False,
+                    biasn2_bit: bool = False, biasn1_bit: bool = False) -> int:
     """ This register controls the selection of the negative signals from each
     channel for bias voltage (BIAS) derivation. See the Bias Drive
     (DC Bias Circuit) section of datasheet for details.
@@ -643,19 +677,21 @@ def make_bias_sensn(biasn8_bit=False, biasn7_bit=False, biasn6_bit=False,
 
     """
 
-    return (biasn8_bit << 7) \
-        | (biasn7_bit << 6) \
-        | (biasn6_bit << 5) \
-        | (biasn5_bit << 4) \
-        | (biasn4_bit << 3) \
-        | (biasn3_bit << 2) \
-        | (biasn2_bit << 1) \
+    return (
+        (biasn8_bit << 7)
+        | (biasn7_bit << 6)
+        | (biasn6_bit << 5)
+        | (biasn5_bit << 4)
+        | (biasn4_bit << 3)
+        | (biasn3_bit << 2)
+        | (biasn2_bit << 1)
         | (biasn1_bit << 0)
+    )
 
 
-def make_loff_sensp(loffp8_bit=False, loffp7_bit=False, loffp6_bit=False,
-                    loffp5_bit=False, loffp4_bit=False, loffp3_bit=False,
-                    loffp2_bit=False, loffp1_bit=False):
+def make_loff_sensp(loffp8_bit: bool = False, loffp7_bit: bool = False, loffp6_bit: bool = False,
+                    loffp5_bit: bool = False, loffp4_bit: bool = False, loffp3_bit: bool = False,
+                    loffp2_bit: bool = False, loffp1_bit: bool = False) -> int:
     """ This register selects the positive side from each channel for lead-off
     detection. See the Lead-Off Detection section for details. The LOFF_STATP
     register bits are only valid if the corresponding LOFF_SENSP bits are set
@@ -679,20 +715,22 @@ def make_loff_sensp(loffp8_bit=False, loffp7_bit=False, loffp6_bit=False,
 
     """
 
-    return (loffp8_bit << 7) \
-        | (loffp7_bit << 6) \
-        | (loffp6_bit << 5) \
-        | (loffp5_bit << 4) \
-        | (loffp4_bit << 3) \
-        | (loffp3_bit << 2) \
-        | (loffp2_bit << 1) \
+    return (
+        (loffp8_bit << 7)
+        | (loffp7_bit << 6)
+        | (loffp6_bit << 5)
+        | (loffp5_bit << 4)
+        | (loffp4_bit << 3)
+        | (loffp3_bit << 2)
+        | (loffp2_bit << 1)
         | (loffp1_bit << 0)
+    )
 
 
-def make_loff_sensn(loffn8_bit=False, loffn7_bit=False, loffn6_bit=False,
-                    loffn5_bit=False, loffn4_bit=False, loffn3_bit=False,
-                    loffn2_bit=False, loffn1_bit=False):
-    """ This register selects the negative side from each channel for lead-off
+def make_loff_sensn(loffn8_bit: bool = False, loffn7_bit: bool = False, loffn6_bit: bool = False,
+                    loffn5_bit: bool = False, loffn4_bit: bool = False, loffn3_bit: bool = False,
+                    loffn2_bit: bool = False, loffn1_bit: bool = False) -> int:
+    """This register selects the negative side from each channel for lead-off
     detection. See the Lead-Off Detection section for details. The LOFF_STATN
     register bits are only valid if the corresponding LOFF_SENSN bits are set
     to 1.
@@ -715,21 +753,23 @@ def make_loff_sensn(loffn8_bit=False, loffn7_bit=False, loffn6_bit=False,
 
     """
 
-    return (loffn8_bit << 7) \
-        | (loffn7_bit << 6) \
-        | (loffn6_bit << 5) \
-        | (loffn5_bit << 4) \
-        | (loffn4_bit << 3) \
-        | (loffn3_bit << 2) \
-        | (loffn2_bit << 1) \
+    return (
+        (loffn8_bit << 7)
+        | (loffn7_bit << 6)
+        | (loffn6_bit << 5)
+        | (loffn5_bit << 4)
+        | (loffn4_bit << 3)
+        | (loffn3_bit << 2)
+        | (loffn2_bit << 1)
         | (loffn1_bit << 0)
+    )
 
 
-def make_loff_flip(loff_flip8_bit=False, loff_flip7_bit=False,
-                   loff_flip6_bit=False, loff_flip5_bit=False,
-                   loff_flip4_bit=False, loff_flip3_bit=False,
-                   loff_flip2_bit=False, loff_flip1_bit=False):
-    """ This register controls the direction of the current used for lead-off
+def make_loff_flip(loff_flip8_bit: bool = False, loff_flip7_bit: bool = False,
+                   loff_flip6_bit: bool = False, loff_flip5_bit: bool = False,
+                   loff_flip4_bit: bool = False, loff_flip3_bit: bool = False,
+                   loff_flip2_bit: bool = False, loff_flip1_bit: bool = False):
+    """This register controls the direction of the current used for lead-off
     derivation. See the Lead-Off Detection section for details.
 
     This function creates the value to be written in the LOFF_SENSN register
@@ -765,18 +805,20 @@ def make_loff_flip(loff_flip8_bit=False, loff_flip7_bit=False,
 
     """
 
-    return (loff_flip8_bit << 7) \
-        | (loff_flip7_bit << 6) \
-        | (loff_flip6_bit << 5) \
-        | (loff_flip5_bit << 4) \
-        | (loff_flip4_bit << 3) \
-        | (loff_flip3_bit << 2) \
-        | (loff_flip2_bit << 1) \
+    return (
+        (loff_flip8_bit << 7)
+        | (loff_flip7_bit << 6)
+        | (loff_flip6_bit << 5)
+        | (loff_flip5_bit << 4)
+        | (loff_flip4_bit << 3)
+        | (loff_flip3_bit << 2)
+        | (loff_flip2_bit << 1)
         | (loff_flip1_bit << 0)
+    )
 
 
-def make_gpio(gpio3=True, gpio2=True, gpio1=True, gpio0=True):
-    """ The general-purpose I/O register controls the action of the three GPIO
+def make_gpio(gpio3: bool = True, gpio2: bool = True, gpio1: bool = True, gpio0: bool = True):
+    """The general-purpose I/O register controls the action of the three GPIO
     pins. When RESP_CTRL[1:0] is in mode 01 and 11, the GPIO2, GPIO3, and GPIO4
     pins are not available for use.
 
@@ -806,8 +848,8 @@ def make_gpio(gpio3=True, gpio2=True, gpio1=True, gpio0=True):
     return (gpio3 << 3) | (gpio2 << 2) | (gpio1 << 1) | (gpio0)
 
 
-def make_misc1(srb1=False):
-    """ This register provides the control to route the SRB1 pin to all
+def make_misc1(srb1: bool = False):
+    """This register provides the control to route the SRB1 pin to all
     inverting inputs of the four, six, or eight channels (ADS1299-4,
     ADS1299-6, or ADS1299).
 
@@ -822,11 +864,11 @@ def make_misc1(srb1=False):
 
     """
 
-    return (srb1 << 5)
+    return srb1 << 5
 
 
-def make_config4(single_shot=False, pd_loff_comp=False):
-    """ This register configures the conversion mode and enables the lead-off
+def make_config4(single_shot: bool = False, pd_loff_comp: bool = False):
+    """This register configures the conversion mode and enables the lead-off
     comparators.
 
     This function creates the value to be written in the CONFIG4 register of
