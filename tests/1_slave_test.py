@@ -1,7 +1,7 @@
 # Import necessary modules
 from machine import Pin, freq, SPI
 from utime import sleep_ms
-from ads1299 import ADS1299, make_config3
+from module.ads1299 import ADS1299, make_config3
 import json
 
 # Set the CPU frequency to 240Mhx
@@ -9,12 +9,15 @@ import json
 freq(240000000)
 
 # Declare CS (Chip Select) Pin for the ADS1299
-cs = Pin(2, Pin.OUT)
+cs = Pin(5, Pin.OUT, value=1)
+
+# Declare DRDY (Data Ready) Pin for synchronization
+drdy = Pin(4, Pin.IN)
 
 # Configure SPI communication with the ADS1299
 # SPI settings are CPOL = 0 and CPHA = 1
-spi = SPI(1, 4000000, polarity=0, phase=1, bits=8,
-          firstbit=SPI.MSB, sck=Pin(14), mosi=Pin(13), miso=Pin(12))
+spi = SPI(2, baudrate=4000000, polarity=0, phase=1, bits=8,
+          firstbit=SPI.MSB, sck=Pin(18), mosi=Pin(23), miso=Pin(19))
 
 # Initialize the ADS1299 with the configured SPI and CS pins
 ads = ADS1299(cs, spi)
@@ -56,23 +59,23 @@ ads.enable_read_continuous()
 
 # Run this section only once to collect a sample set of data
 for i in range(250):
+
+    # Wait for DRDY pin to go LOW (indicates data is ready)
+    while drdy.value():
+        pass
+
     # Read the channels continuously from the ADS1299
     channels_config = ads.read_channels_continuous()
     # Store the reading from each channel in the dictionary
     for i in range(8):
         dictionary[f'Ch{i}'].append(channels_config[i])
-    # Wait for 1 ms before taking the next reading
-    sleep_ms(1)
 
-# Convert the dictionary to a JSON string
-jsonString = json.dumps(dictionary)
 
-# Open a file named "signals.json" in write mode
-jsonFile = open("signals.json", "w")
-# Write the JSON string to the file
-jsonFile.write(jsonString)
-# Close the file
-jsonFile.close()
+print(dictionary) # View data
+
+# Guardar los datos en el archivo JSON de forma eficiente
+with open("signals.json", "w") as jsonFile:
+    json.dump(dictionary, jsonFile)
 
 # Clear the dictionary to prepare for the next set of readings
 for i in range(8):

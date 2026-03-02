@@ -1,51 +1,63 @@
-
 PORT = /dev/ttyUSB0
+FIRMWARE = ESP32_GENERIC-20251209-v1.27.0.bin # You need to downloand and update Firmware
 
-all: rs run
+all: rs prep run
 
 run:
-	ampy -p $(PORT) put module/ads1299.py
-	ampy -p $(PORT) run app/main.py
+	uv run ampy -p $(PORT) put src/module/
+	uv run ampy -p $(PORT) run src/main.py
+
+prep:
+	uv run ampy -p $(PORT) put src/module/
 
 list:
-	ampy -p $(PORT) ls
+	uv run ampy -p $(PORT) ls
 
-flash: rs
-	ampy -p $(PORT) put module/ads1299.py
-	ampy -p $(PORT) put app/main.py
+flash: rs prep
+	uv run ampy -p $(PORT) put src/app/main.py
 
-test1: rs
-	ampy -p $(PORT) put module/ads1299.py
-	ampy -p $(PORT) run tests/1_slave_test.py
-	rshell -p /dev/ttyUSB0 cp /pyboard/signals.json tests/
-	python tests/plot.py
-	rm tests/signals.json
+test_1s: rs prep
+	uv run ampy -p $(PORT) run tests/1_slave_test.py
+	uv run rshell -p /dev/ttyUSB0 cp /pyboard/signals.json tests/
+	uv run python tests/plot_channels.py
+	uv run rm tests/signals.json
 
-test2: rs
-	ampy -p $(PORT) put module/ads1299.py
-	ampy -p $(PORT) run tests/2_slaves_test.py
-	rshell -p /dev/ttyUSB0 cp /pyboard/signals.json tests/
-	python tests/plot.py
-	rm tests/signals.json
+test_2s: rs prep
+	uv run ampy -p $(PORT) run tests/2_slaves_test.py
+	uv run rshell -p /dev/ttyUSB0 cp /pyboard/signals.json tests/
+	uv run python tests/plot_channels.py
+	uv run rm tests/signals.json
 
 repl:
-	rshell -p $(PORT) repl
+	uv run rshell -p $(PORT) repl
 
 rs:
-	ampy -p $(PORT) reset
+	uv run ampy -p $(PORT) reset
 
 clean:
-	ampy -p $(PORT) rm main.py
-	ampy -p $(PORT) rm ads1299.py
+	uv run ampy -p $(PORT) rmdir module/
+	uv run ampy -p $(PORT) rm main.py
+
+esp_update: esp_erase esp_flash
+
+esp_erase:
+	uv run esptool --chip esp32 --port $(PORT) erase-flash
+
+esp_flash:
+	uv run esptool --chip esp32 --port $(PORT) --baud 460800 write_flash -z 0x1000 $(FIRMWARE)
 
 help:
 	@echo "### HELP ###"
-	@echo "make all   -> Runs the rs and run recipes."
-	@echo "make run   -> Uploads the ads1299.py and just run main.py file to the Pyboard.py script."
-	@echo "make list  -> Lists all files on the Pyboard."
-	@echo "make flash -> Resets the Pyboard and uploads the ads1299.py and main.py files."
-	@echo "make test1 -> Execute test for one slave."
-	@echo "make test2 -> Execute test for two slaves."
-	@echo "make repl  -> Connects to the Pyboard's REPL and start it."
-	@echo "make rs    -> Resets the Pyboard."
-	@echo "make clean -> Removes the main.py and ads1299.py files from the Pyboard."
+	@echo "make all        -> Runs the rs and run recipes."
+	@echo "make run        -> Just run main.py file to the Pyboard."
+	@echo "make prep       -> Uploads the module/ dir and files that will be use to the Pyboard."
+	@echo "make list       -> Lists all files on the Pyboard."
+	@echo "make flash      -> Flash all files of the project to the Pyboard."
+	@echo "make test_1s    -> Execute test for one slave."
+	@echo "make test_2s    -> Execute test for two slaves."
+	@echo "make repl       -> Connects to the Pyboard's REPL and start it."
+	@echo "make rs         -> Resets the Pyboard."
+	@echo "make clean      -> Removes project files from the Pyboard just leave boot.py."
+	@echo "make esp_update -> Erase flashe and deploy firmware to the Pyboard"
+	@echo "make esp_erase  -> Erase the entire flash of Pyboard"
+	@echo "make esp_flash  -> Deploy the firmware to the Pyboard"

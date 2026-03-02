@@ -15,6 +15,8 @@ noise analog-to-digital converter for biopotential measurements.
 - [ADS1299-x-MicroPython-Module](#ads1299-x-micropython-module)
   - [To-Do](#to-do)
   - [Dependencies](#dependencies)
+    - [IDE](#ide)
+    - [UV](#uv)
     - [Installation on ArchLinux](#installation-on-archlinux)
   - [How to use?](#how-to-use)
     - [Before implement it](#before-implement-it)
@@ -33,17 +35,43 @@ noise analog-to-digital converter for biopotential measurements.
 - [ ] Migrate this project to FreeRTOS.
 
 ## Dependencies
-* Text editor, but also you can use and IDE like [Thonny][2] or [Mu][3]
-* [ampy][4]
-* [Make][5]
-* [matplotlib][6]
-* [rshell][7]
 
-### Installation on ArchLinux
-Use [Yay][4] or [Paru][5]
+There are two ways to use this project:
+
+### IDE
+1. [Thonny][2]
+2. [Mu][3]
+
+> [!IMPORTANT]
+> When using an IDE, you will need to manually upload the files to the board. To use the automation scripts, please
+> refer to the [UV](#uv) section.
+
+> [!WARNING]
+> While [Mu][3] is still functional, it has seen less development activity recently. [Thonny][2] is the recommended
+> choice.
+
+### UV
+
+[UV][1] is a fast Python package and project manager. It automatically manages the environment and dependencies
+defined in [`pyproject.toml`](./pyproject.toml), allowing you to run the automation scripts in the
+[`Makefile`](./Makefile) without manually installing each tool.
+
+To get started, you only need:
+1. A text editor of your choice
+2. [uv][1]
+3. Install firmaware (`File.bin`) version from [Mycropython Downloads][17]
+
+On the other hand, the python project's primary dependencies include:
+* [ampy][4]
+* [rshell][7]
+* [matplotlib][6]
+* [esptool][16]
+
+#### Installation on Arch Linux
+Use [Yay][9] or [Paru][8] to install the core tools:
 
 ```sh
-yay -S ampy make matplotlib rshell # Change yay for paru
+yay -S uv make # Replace yay with paru if preferred
 ```
 
 
@@ -169,25 +197,25 @@ Both `test1` and `test2` recipes are useful for testing the ADS1299 ADC driver w
 
 
 ## References
-- [issues][1]
+- [uv][1]
 - [Thonny][2]
-- [Mu][2]
+- [Mu][3]
 - [ampy][4]
 - [Make][5]
 - [matplotlib][6]
 - [rshell][7]
-- [Yay][8]
-- [Paru][9]
+- [Yay][9]
+- [Paru][8]
+- [esptool][16]
 - [ADS1299-x Datasheet][10]
 - [EEG Front-End Performance Demonstration Kit][11]
 - [MicroPython ESP32][12]
 - [MicroPython documentation][13]
 - [Getting started with MicroPython on the ESP32][14]
 - [ADS1299 TI][15]
-
-
+- [Mycropython Downloads][17]
 <!--### References-->
-[1]: https://verilator.org/guide/latest/overview.html "Verilator"
+[1]: https://docs.astral.sh/uv/getting-started/installation/ "uv"
 [2]: https://github.com/thonny/thonny "thonny"
 [3]: https://codewith.mu/ "Mu"
 [4]: https://github.com/scientifichackers/ampy "ampy"
@@ -202,3 +230,5 @@ Both `test1` and `test2` recipes are useful for testing the ADS1299 ADC driver w
 [13]: https://docs.micropython.org/en/latest/ "MicroPython documentation"
 [14]: https://docs.micropython.org/en/latest/esp32/tutorial/intro.html?highlight=esp32 "Getting started with MicroPython on the ESP32"
 [15]: https://www.ti.com/product/ADS1299?ds_k=ADS1299&DCM=yes "ADS1299 TI"
+[16]: https://github.com/espressif/esptool "esptool"
+[17]: https://micropython.org/download/ "Firmware"

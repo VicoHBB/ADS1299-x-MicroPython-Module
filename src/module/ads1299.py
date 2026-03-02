@@ -1,4 +1,5 @@
 from utime import sleep_ms, sleep_us
+from micropython import const
 
 
 def uint_to_int(unsigned_int, number_of_bits=24):
@@ -29,119 +30,119 @@ class ADS1299:
     Commands definitions
     """
     # Commands
-    WAKEUP = 0x02
-    STANDBY = 0x04
-    RESET = 0x06
-    START = 0x08
-    STOP = 0x0A
+    WAKEUP = const(0x02)
+    STANDBY = const(0x04)
+    RESET = const(0x06)
+    START = const(0x08)
+    STOP = const(0x0A)
     # Data Read Commands
-    RDATAC = 0x10
-    SDATAC = 0x11
-    RDATA = 0x12
+    RDATAC = const(0x10)
+    SDATAC = const(0x11)
+    RDATA = const(0x12)
     # Register Read Commands -- n nnnn = number of registers to be read or
     # written – 1. For example, to read or write three registers,
     # set n nnnn = 0 (0010). r rrrr = starting register address for
     # read or write commands.
-    RREG = 0x01 << 5
-    WREG = 0x01 << 6
+    RREG = const(0x01 << 5)
+    WREG = const(0x01 << 6)
     """"""
     """
     Register maps
     """
     # Read Only ID Registers
-    ID = 0x00
+    ID = const(0x00)
     # Global Settings Across Channels
-    CONFIG1 = 0x01
-    CONFIG2 = 0x02
-    CONFIG3 = 0x03
-    LOFF = 0x04
+    CONFIG1 = const(0x01)
+    CONFIG2 = const(0x02)
+    CONFIG3 = const(0x03)
+    LOFF = const(0x04)
     # Channel-Specific Settings
-    CH1SET = 0x05
-    CH2SET = 0x06
-    CH3SET = 0x07
-    CH4SET = 0x08
-    CH5SET = 0x09
-    CH6SET = 0x0A
-    CH7SET = 0x0B
-    CH8SET = 0x0C
-    BIAS_SENSP = 0x0D
-    BIAS_SENSN = 0x0E
-    LOFF_SENSP = 0x0F
-    LOFF_SENSN = 0x10
-    LOFF_FLIP = 0x11
+    CH1SET = const(0x05)
+    CH2SET = const(0x06)
+    CH3SET = const(0x07)
+    CH4SET = const(0x08)
+    CH5SET = const(0x09)
+    CH6SET = const(0x0A)
+    CH7SET = const(0x0B)
+    CH8SET = const(0x0C)
+    BIAS_SENSP = const(0x0D)
+    BIAS_SENSN = const(0x0E)
+    LOFF_SENSP = const(0x0F)
+    LOFF_SENSN = const(0x10)
+    LOFF_FLIP = const(0x11)
     # Lead-Off Status Registers (Read-Only Registers)
-    LOFF_STATP = 0x12
-    LOFF_STATN = 0x13
+    LOFF_STATP = const(0x12)
+    LOFF_STATN = const(0x13)
     # GPIO and OTHER Registers
-    GPIO = 0x14
-    MISC1 = 0x15
-    MISC2 = 0x16
-    CONFIG4 = 0x17
+    GPIO = const(0x14)
+    MISC1 = const(0x15)
+    MISC2 = const(0x16)
+    CONFIG4 = const(0x17)
     """"""
     """
     CNFIG1 SAMPLE RATE
     """
-    SAMPLE_RATE_16K = 0b000
-    SAMPLE_RATE_8K = 0b001
-    SAMPLE_RATE_4K = 0b010
-    SAMPLE_RATE_2K = 0b011
-    SAMPLE_RATE_1K = 0b100
-    SAMPLE_RATE_500 = 0b101
-    SAMPLE_RATE_250 = 0b110
+    SAMPLE_RATE_16K = const(0b000)
+    SAMPLE_RATE_8K = const(0b001)
+    SAMPLE_RATE_4K = const(0b010)
+    SAMPLE_RATE_2K = const(0b011)
+    SAMPLE_RATE_1K = const(0b100)
+    SAMPLE_RATE_500 = const(0b101)
+    SAMPLE_RATE_250 = const(0b110)
     """"""
     """
     CNFIG2 PARAMETERS Signal frequency
 
     """
-    PULSED_1 = 0x00
-    PULSED_2 = 0x01
-    NOT_USE = 0x10
-    DC = 0x11
+    PULSED_1 = const(0x00)
+    PULSED_2 = const(0x01)
+    NOT_USE = const(0x10)
+    DC = const(0x11)
     """"""
     """
     LOFF Values
     """
     # Lead-off comparator threshold
-    COMP_95P_5N = 0b000
-    COMP_92_5P_7_5N = 0b001
-    COMP_90P_10N = 0b010
-    COMP_87_5P_12_5N = 0b011
-    COMP_85P_15N = 0b100
-    COMP_80N_20N = 0b101
-    COMP_75P_25N = 0b110
-    COMP_70P_30N = 0b111
+    COMP_95P_5N = const(0b000)
+    COMP_92_5P_7_5N = const(0b001)
+    COMP_90P_10N = const(0b010)
+    COMP_87_5P_12_5N = const(0b011)
+    COMP_85P_15N = const(0b100)
+    COMP_80N_20N = const(0b101)
+    COMP_75P_25N = const(0b110)
+    COMP_70P_30N = const(0b111)
     # Lead-off current magnitude
-    I_6NA = 0b00
-    I_24NA = 0b01
-    I_6UA = 0b10
-    I_24UA = 0b11
+    I_6NA = const(0b00)
+    I_24NA = const(0b01)
+    I_6UA = const(0b10)
+    I_24UA = const(0b11)
     # Lead-off frequency
-    DC_LOFF = 0b00
-    AC_LOFF_7_8HZ = 0b01
-    AC_LOFF_31_2HZ = 0b10
-    AC_LOFF_FDR_BY_4 = 0b11
+    DC_LOFF = const(0b00)
+    AC_LOFF_7_8HZ = const(0b01)
+    AC_LOFF_31_2HZ = const(0b10)
+    AC_LOFF_FDR_BY_4 = const(0b11)
     """"""
     """
     CHnSET PARAMETERS
     """
     # Gain Values
-    GAIN_1 = 0b000
-    GAIN_2 = 0b001
-    GAIN_4 = 0b010
-    GAIN_6 = 0b011
-    GAIN_8 = 0b100
-    GAIN_12 = 0b101
-    GAIN_24 = 0b110
-    NO_GAIN = 0b111
+    GAIN_1 = const(0b000)
+    GAIN_2 = const(0b001)
+    GAIN_4 = const(0b010)
+    GAIN_6 = const(0b011)
+    GAIN_8 = const(0b100)
+    GAIN_12 = const(0b101)
+    GAIN_24 = const(0b110)
+    NO_GAIN = const(0b111)
     # MUXr Values
-    NORMAL = 0b000  # Normal electrode input.
-    SHORTED = 0b001  # Input shorted (for offset or noise measurement).
-    BIAS_MEAS = 0b010  # Used in conjunction with BIAS_MEAS bit for BIAS meas.
-    MVDD = 0b011  # MVDD for supply measurement.
-    TEMP = 0b100  # Temperature sensor.
-    TEST = 0b101  # Test signal.
-    BIAS_DRP = 0b110  # Positive electrode is the driver
-    BIAS_DRN = 0b111  # Negative electrode is the driver
+    NORMAL = const(0b000)  # Normal electrode input.
+    SHORTED = const(0b001)  # Input shorted (for offset or noise measurement).
+    BIAS_MEAS = const(0b010)  # Used in conjunction with BIAS_MEAS bit for BIAS meas.
+    MVDD = const(0b011)  # MVDD for supply measurement.
+    TEMP = const(0b100)  # Temperature sensor.
+    TEST = const(0b101)  # Test signal.
+    BIAS_DRP = const(0b110)  # Positive electrode is the driver
+    BIAS_DRN = const(0b111)  # Negative electrode is the driver
     """"""
 
     def __init__(self, cs, spi_channel):

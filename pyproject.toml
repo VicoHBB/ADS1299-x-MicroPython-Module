@@ -1,0 +1,21 @@
+[project]
+name = "ADS1299-x-MicroPython-Module"
+version = "0.1.0"
+description = "Module to control ADS1299 TI Circuit"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "adafruit-ampy>=1.1.0",
+    "esptool>=5.2.0",
+    "matplotlib>=3.10.8",
+    "rshell>=0.0.36",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"     # Python 3.11, cámbialo según tu caso
+src = ["src"]                # Importante: define tu carpeta fuente
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"] # Puedes elegir qué reglas usar (Error, Format, Warning, Import)
+ignore = []             # Por ejemplo, ignorar líneas largas si usas black
