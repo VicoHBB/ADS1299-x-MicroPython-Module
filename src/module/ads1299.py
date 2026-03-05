@@ -1,5 +1,8 @@
+# #! /bin/MicroPython
+import array
+
+from machine import SPI, Pin
 from micropython import const
-from machine import Pin, SPI
 from utime import sleep_ms, sleep_us
 
 _LIMIT = const(1 << 24)
@@ -148,11 +151,14 @@ class ADS1299:
     BIAS_DRN = const(0b111)  # Negative electrode is the driver
     """"""
 
-    def __init__(self, cs: Pin, spi_channel: SPI):
+    def __init__(self, cs: Pin, spi_channel: SPI) -> None:
         self.cs = cs
         self.spi_channel = spi_channel
         # @HACK: This avoid create multiple bytearrays from repeated bytearray allocations during data rx
-        self.data_rx = bytearray(27)
+        self._data_rx = bytearray(27)
+        self._status_arr = array.array('B', [0] * 3)
+        self._channels_arr = array.array('i', [0] * 8)
+
 
     def init(self, config1: int = 0x96, config2: int = 0xC0, config3: int = 0x60) -> None:
         """This method initializes the ADS1299, with 250 S/s, use internal
@@ -177,6 +183,9 @@ class ADS1299:
         self.send_command(ADS1299.STOP)
         # Set reference
         self.write_reg(ADS1299.CONFIG3, config3)
+        # Wait for reference stabilization if internal buffer is enabled (bit 7)
+        if config3 & 0x80:
+            sleep_ms(150)
         # Set other cofing registers, sample rate & test signals
         self.write_registers(ADS1299.CONFIG1, [config1, config2])
         sleep_ms(4)
@@ -191,9 +200,9 @@ class ADS1299:
         """
         self.cs.off()
         self.spi_channel.write(bytearray([command]))
-        sleep_us(10)  # Wait to execute command (tSCCS )
+        sleep_us(4)  # Wait to execute command (tSCCS )
         self.cs.on()
-        sleep_us(10)  # Wait to next command (tSDECODE)
+        sleep_us(4)  # Wait to next command (tSDECODE)
         pass
 
     def write_reg(self, register: int, data_to_write: int) -> None:
@@ -216,28 +225,28 @@ class ADS1299:
         :returns: None
 
         """
-        n = len(data_to_write)
+        nregs = len(data_to_write)
 
-        if n == 0:
+        if nregs == 0:
             return  # Do nothing
 
         self.cs.off()
         # Send first byte [ WREG + Addr ]
         self.spi_channel.write(bytearray([ADS1299.WREG | starting_register]))
-        sleep_us(6)  # Wait to next command (tSDECODE)
+        sleep_us(4)  # Wait to next command (tSDECODE)
 
         # Send second byte number of registers [ n - 1 ]
-        self.spi_channel.write(bytearray([n - 1]))
-        sleep_us(6)  # Wait to next command (tSDECODE)
+        self.spi_channel.write(bytearray([nregs - 1]))
+        sleep_us(4)  # Wait to next command (tSDECODE)
 
         # Send data one by one
-        for val in data_to_write:
-            self.spi_channel.write(bytearray([val]))
-            sleep_us(4)  # Gap between data bytes
+        for value in data_to_write:
+            self.spi_channel.write(bytearray([value]))
+            sleep_us(2)  # Gap between data bytes
 
-        sleep_us(6)  # Wait to execute command (tSCCS )
+        sleep_us(4)  # Wait to execute command (tSCCS )
         self.cs.on()
-        sleep_us(10)
+        sleep_us(4)
 
         pass
 
@@ -268,18 +277,18 @@ class ADS1299:
         self.cs.off()
         # Send first byte [ WREG + Addr ]
         self.spi_channel.write(bytearray([ADS1299.RREG | starting_register]))
-        sleep_us(6)
+        sleep_us(4)
 
         # Send second byte number of registers [ n - 1 ]
         self.spi_channel.write(bytearray([number_of_registers - 1]))
-        sleep_us(10)  # Wait for the answare
+        sleep_us(4)  # Wait for the answare
 
         for _ in range(number_of_registers):
             byte = self.spi_channel.read(1, 0x00)  # Read one byte
             registers_list.append(byte[0])
-            sleep_us(4)  # Gap between data bytes
+            sleep_us(2)  # Gap between data bytes
 
-        sleep_us(6)  # Wait to execute command (tSCCS )
+        sleep_us(4)  # Wait to execute command (tSCCS )
         self.cs.on()
 
         return registers_list
@@ -343,41 +352,40 @@ class ADS1299:
 
         pass
 
-    def read_channels_once(self) -> tuple[list[int], list[int]]:
+    def read_channels_once(self) -> tuple[array.array, array.array]:
         """This method performs a single read of the status word and all channel data.
 
         :return: A tuple containing a list of 3 status bytes and a list of 8 channel samples.
 
         """
-        status_registers = []
-
         self.cs.off()
         self.spi_channel.write(bytearray([ADS1299.RDATA]))
 
-        sleep_us(6)  # Wait to next command (tSDECODE)
+        sleep_us(4)  # Wait to next command (tSDECODE)
 
         # Write on self.data_rx pre-assigned to avoid create multiple objects
-        self.spi_channel.readinto(self.data_rx, 0x00)
-        sleep_us(6)  # Wait to execute command (tSCCS)
+        self.spi_channel.readinto(self._data_rx, 0x00)
+        sleep_us(4)  # Wait to execute command (tSCCS)
         self.cs.on()
 
-        mv = memoryview(self.data_rx)
+        mem_view = memoryview(self._data_rx)
 
         # Status (bytes 0, 1, 2)
-        status_registers = list(mv[0:3])
+        for i in range(3):
+            self._status_arr[i] = mem_view[i]
 
         # Channesl data (bytes 3-26)
-        channels = [0] * 8
         for i in range(8):
             start = 3 + i * 3
-            raw_value = (mv[start] << 16) | (mv[start + 1] << 8) | mv[start + 2]
-            channels[i] = uint_to_int(raw_value)
+            raw_value = (mem_view[start] << 16) | (mem_view[start + 1] << 8) | mem_view[start + 2]
+            self._channels_arr[i] = uint_to_int(raw_value)
 
-        return status_registers, channels
+        return self._status_arr, self._channels_arr
 
 
     def enable_read_continuous(self) -> None:
         """This method enables continuous reading of the data.
+           NOTE: This enables pin DRDY
         :returns: None
 
         """
@@ -385,33 +393,34 @@ class ADS1299:
         self.send_command(ADS1299.RDATAC)
         # This delay is calculated from the datasheet correponding to
         # 4 t CLK cycles this is 1.96us, but looks like does not work with 2us
-        sleep_us(10)
+        sleep_us(2)
 
         pass
 
-    def read_channels_continuous(self) -> tuple[list[int], list[int]]:
+    def read_channels_continuous(self) -> tuple[array.array, array.array]:
         """This method continuously reads the data from all channels affter enable continuous read.
         :returns: A tuple containing a list of 3 status bytes and a list of 8 channel samples.
         in continuous mode.
 
         """
         self.cs.off()
-        self.spi_channel.readinto(self.data_rx, 0x00)
-        sleep_us(6)  # Wait to execute command (tSCCS)
+        self.spi_channel.readinto(self._data_rx, 0x00)
+        sleep_us(4)  # Wait to execute command (tSCCS)
         self.cs.on()
 
-        mv = memoryview(self.data_rx)
+        mem_view = memoryview(self._data_rx)
         # Status (bytes 0, 1, 2)
-        status_registers = list(mv[0:3])
+        for i in range(3):
+            self._status_arr[i] = mem_view[i]
 
         # Canales (bytes 3-26)
-        channels = [0] * 8
         for i in range(8):
             start = 3 + i * 3
-            raw_value = (mv[start] << 16) | (mv[start + 1] << 8) | mv[start + 2]
-            channels[i] = uint_to_int(raw_value)
+            raw_value = (mem_view[start] << 16) | (mem_view[start + 1] << 8) | mem_view[start + 2]
+            self._channels_arr[i] = uint_to_int(raw_value)
 
-        return status_registers, channels
+        return self._status_arr, self._channels_arr
+
 
     def disable_read_continuous(self) -> None:
         """Disable continuous reading of the data.
@@ -768,7 +777,7 @@ def make_loff_sensn(loffn8_bit: bool = False, loffn7_bit: bool = False, loffn6_b
 def make_loff_flip(loff_flip8_bit: bool = False, loff_flip7_bit: bool = False,
                    loff_flip6_bit: bool = False, loff_flip5_bit: bool = False,
                    loff_flip4_bit: bool = False, loff_flip3_bit: bool = False,
-                   loff_flip2_bit: bool = False, loff_flip1_bit: bool = False):
+                   loff_flip2_bit: bool = False, loff_flip1_bit: bool = False) -> int:
     """This register controls the direction of the current used for lead-off
     derivation. See the Lead-Off Detection section for details.
 
@@ -817,7 +826,7 @@ def make_loff_flip(loff_flip8_bit: bool = False, loff_flip7_bit: bool = False,
     )
 
 
-def make_gpio(gpio3: bool = True, gpio2: bool = True, gpio1: bool = True, gpio0: bool = True):
+def make_gpio(gpio3: bool = True, gpio2: bool = True, gpio1: bool = True, gpio0: bool = True) -> int:
     """The general-purpose I/O register controls the action of the three GPIO
     pins. When RESP_CTRL[1:0] is in mode 01 and 11, the GPIO2, GPIO3, and GPIO4
     pins are not available for use.
@@ -848,7 +857,7 @@ def make_gpio(gpio3: bool = True, gpio2: bool = True, gpio1: bool = True, gpio0:
     return (gpio3 << 3) | (gpio2 << 2) | (gpio1 << 1) | (gpio0)
 
 
-def make_misc1(srb1: bool = False):
+def make_misc1(srb1: bool = False) -> int:
     """This register provides the control to route the SRB1 pin to all
     inverting inputs of the four, six, or eight channels (ADS1299-4,
     ADS1299-6, or ADS1299).
@@ -867,7 +876,7 @@ def make_misc1(srb1: bool = False):
     return srb1 << 5
 
 
-def make_config4(single_shot: bool = False, pd_loff_comp: bool = False):
+def make_config4(single_shot: bool = False, pd_loff_comp: bool = False) -> int:
     """This register configures the conversion mode and enables the lead-off
     comparators.
 

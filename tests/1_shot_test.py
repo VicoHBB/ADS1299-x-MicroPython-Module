@@ -36,7 +36,6 @@ def irq_handler(pin: Pin) -> None:
     :return: None
     """
     global data_ready
-    data_ready = True
     pass
 
 def main() -> None:
@@ -49,9 +48,9 @@ def main() -> None:
     global data_ready # Indicates that is global
     data_ready = False
 
-    ads = ADS1299(cs, spi)                               # Initialize the ADS1299 with the configured SPI and CS pins
-    cf1 = make_config1(data_rate=ADS1299.SAMPLE_RATE_1K) # Set the samples rate to 500sps
-    cf3 = make_config3(pwr_down_refbuf=True)             # Set the internal reference buffer to power down mode
+    ads = ADS1299(cs, spi)                                # Initialize the ADS1299 with the configured SPI and CS pins
+    cf1 = make_config1(data_rate=ADS1299.SAMPLE_RATE_500) # Set the samples rate to 500sps
+    cf3 = make_config3(pwr_down_refbuf=True)              # Set the internal reference buffer to power down mode
 
     ads.init(config1=cf1,config3=cf3) # Initialize the ADS1299 with the configuration settings
 
@@ -98,8 +97,9 @@ def main() -> None:
     while not channel_queues[0].is_full():
         if data_ready:
             data_ready = False
-            # Read the channels continuously from the ADS1299
-            _, channels_data = ads.read_channels_continuous()
+            # Read the channels ONE SHOT AT THE TIME from the ADS1299
+            _, channels_data = ads.read_channels_once()
+            # @NOTE: This only works with samples rate less than 1K
 
             # Write to queue instead of appending to list
             for i in range(8):
