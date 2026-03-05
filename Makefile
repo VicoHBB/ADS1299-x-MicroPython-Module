@@ -27,6 +27,12 @@ test_blink:
 look: rs
 	$(MPR) run tests/view_networks.py
 
+test_int: rs prep
+	$(MPR) run tests/internal_signals.py
+	$(MPR) cp :signals.json tests/signals.json
+	uv run python tests/plot_channels.py
+	uv run rm tests/signals.json
+
 test_os: rs prep
 	$(MPR) run tests/1_shot_test.py
 	$(MPR) cp :signals.json tests/signals.json

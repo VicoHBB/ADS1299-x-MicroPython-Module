@@ -73,9 +73,10 @@ def main() -> None:
     # ])
 
     # Read all the registers of the ADS1299 and print their values
+    print("--- ADS1299 Internal Test Signals Config ---")
     regs = ads.read_all_registers()
-    for i in regs:
-        print(hex(i))
+    for addr, val in enumerate(regs):
+        print("Reg 0x{:02x}: 0x{:02x}".format(addr, val))
 
     # Create a dictionary for the final output
     dictionary = {f'Ch{i}': [] for i in range(8)}
