@@ -1,42 +1,61 @@
 PORT = /dev/ttyUSB0
 FIRMWARE = ESP32_GENERIC-20251209-v1.27.0.bin # You need to downloand and update Firmware
+MPR = uv run mpremote connect $(PORT)
 
 all: rs prep run
 
 run:
-	uv run ampy -p $(PORT) put src/module/
-	uv run ampy -p $(PORT) run src/main.py
+	$(MPR) cp -r src/module :
+	$(MPR) run src/main.py
 
 prep:
-	uv run ampy -p $(PORT) put src/module/
+	$(MPR) cp -r src/module :
+	$(MPR) cp src/ring_buffer.py :
+
+mon:
+	uv run streamlit run src/monitor/dashboard.py
 
 list:
-	uv run ampy -p $(PORT) ls
+	$(MPR) ls
 
 flash: rs prep
-	uv run ampy -p $(PORT) put src/app/main.py
+	$(MPR) cp src/app/main.py :main.py
+
+test_blink:
+	$(MPR) run tests/blink.py
+
+look: rs
+	$(MPR) run tests/view_networks.py
+
+test_os: rs prep
+	$(MPR) run tests/1_shot_test.py
+	$(MPR) cp :signals.json tests/signals.json
+	uv run python tests/plot_channels.py
+	uv run rm tests/signals.json
 
 test_1s: rs prep
-	uv run ampy -p $(PORT) run tests/1_slave_test.py
-	uv run rshell -p /dev/ttyUSB0 cp /pyboard/signals.json tests/
+	$(MPR) run tests/1_slave_test.py
+	$(MPR) cp :signals.json tests/signals.json
 	uv run python tests/plot_channels.py
 	uv run rm tests/signals.json
 
 test_2s: rs prep
-	uv run ampy -p $(PORT) run tests/2_slaves_test.py
-	uv run rshell -p /dev/ttyUSB0 cp /pyboard/signals.json tests/
+	$(MPR) run tests/2_slaves_test.py
+	$(MPR) cp :signals.json tests/signals.json
 	uv run python tests/plot_channels.py
 	uv run rm tests/signals.json
 
 repl:
-	uv run rshell -p $(PORT) repl
+	$(MPR) reset
 
 rs:
-	uv run ampy -p $(PORT) reset
+	$(MPR) reset
+	@sleep 2
 
 clean:
-	uv run ampy -p $(PORT) rmdir module/
-	uv run ampy -p $(PORT) rm main.py
+	-$(MPR) fs rm -r :module
+	-$(MPR) rm :main.py
+	-$(MPR) rm :queue.py
 
 esp_update: esp_erase esp_flash
 
