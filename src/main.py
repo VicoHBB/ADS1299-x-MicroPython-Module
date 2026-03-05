@@ -1,66 +1,149 @@
-# Import necessary modules
-from machine import Pin, freq, SPI
-from utime import sleep_ms
-from module.ads1299 import ADS1299, make_config1, make_config3
+# #! /bin/MicroPython
+import gc
 import json
+import socket
+import network
+from machine import Pin, SPI, freq
+from utime import sleep_ms, ticks_us
+from ring_buffer import RingBuffer
+from wlan import do_connect
+from module.ads1299 import ADS1299, make_config1, make_config3
 
-# Set the CPU frequency to 240Mhx (Maximum frequency)
-# This can help optimize the performance of the microcontroller
-# @NOTE: Looks like Micro firmware does not work properly with maximum frequency
+########################################################################################################################
+#                                                       GLOBALS                                                        #
+########################################################################################################################
+
+# Networking
+SSID = "Put you wifi name here" # Check available networks with make look
+PASSWORD = "Put you password here"
+SERVER_IP = "Put you IP here"
+SERVER_PORT = "Verify port here"
+
+
+# Boost CPU for maximum throughput
 freq(240000000)
 
-# Declare CS (Chip Select) Pin for the ADS1299
-cs = Pin(2, Pin.OUT)
+# Hardware Pin Mapping
+CS_PIN = const(5)
+DRDY_PIN = const(4)
+LED_PIN = const(2)
 
-# Configure SPI communication with the ADS1299
-# SPI settings are CPOL = 0 and CPHA = 1
-spi = SPI(1, 4000000, polarity=0, phase=1, bits=8,
-          firstbit=SPI.MSB, sck=Pin(14), mosi=Pin(13), miso=Pin(12))
+# Pre-formatted JSON string for maximum speed (bypass json.dumps)
+_JSON_FMT = '{{"Ch0":{},"Ch1":{},"Ch2":{},"Ch3":{},"Ch4":{},"Ch5":{},"Ch6":{},"Ch7":{}}}\n'
 
-# Initialize the ADS1299 with the configured SPI and CS pins
-ads = ADS1299(cs, spi)
+# Global flags and objects
+data_ready = False
+cs = Pin(CS_PIN, Pin.OUT, value=True)
+drdy = Pin(DRDY_PIN, Pin.IN, Pin.PULL_UP)
+board_led = Pin(LED_PIN, Pin.OUT)
 
-# Set the sample rate to 500sps
-cf1 = make_config1(data_rate=ADS1299.SAMPLE_RATE_500)
+# SPI Configuration: 16MHz clock
+spi = SPI(2, baudrate=16000000, polarity=0, phase=1, bits=8, firstbit=SPI.MSB,
+          sck=Pin(18), mosi=Pin(23), miso=Pin(19))
 
-# Set the internal reference buffer to power down mode
-cf3 = make_config3(pwr_down_refbuf=True)
+channel_queues = tuple(RingBuffer(256) for _ in range(8))
+data_payload = {f'Ch{i}': 0 for i in range(8)}
 
-# Initialize the ADS1299 with the configuration settings
-ads.init(config1=cf1, config3=cf3)
+########################################################################################################################
+#                                                      FUNCTIONS                                                       #
+########################################################################################################################
 
-# Configure all channels to be active, with a gain of 2 and normal input
-# in a single instruction with method config_all_channels()
-ads.config_all_channels(
-    channels_active=8, gain=ADS1299.GAIN_2, channel_input=ADS1299.NORMAL)
+def irq_handler(pin: Pin) -> None:
+    """
+    Minimal ISR for DRDY pin.
+    """
+    global data_ready
+    data_ready = True
 
-# Create a dictionary to store the data from each channel
-dictionary = {f'Ch{i}': [] for i in range(8)}
-
-# Enable continuous reading from the ADS1299
-ads.enable_read_continuous()
-
-# Infinite loop to continuously read and store data
-while True:
-    for i in range(250):
-        # Read the channels continuously from the ADS1299
-        channels = ads.read_channels_continuous()
-        # Store the reading from each channel in the dictionary
-        for i in range(8):
-            dictionary[f'Ch{i}'].append(channels[i])
-        # Wait for 1 ms before taking the next reading
-        sleep_ms(1)
-
-    # Convert the dictionary to a JSON string
-    jsonString = json.dumps(dictionary)
-
-    # Open a file named "signals.json" in write mode
-    jsonFile = open("signals.json", "w")
-    # Write the JSON string to the file
-    jsonFile.write(jsonString)
-    # Close the file
-    jsonFile.close()
-
-    # Clear the dictionary to prepare for the next set of readings
+def read_data(ads: ADS1299) -> None:
+    """
+    Reads continuous data from ADS1299 and pushes raw integers to queues.
+    """
+    _, channels_data = ads.read_channels_continuous()
     for i in range(8):
-        dictionary[f'Ch{i}'].clear()
+        channel_queues[i].write(channels_data[i])
+
+def send_data(sock: socket.socket) -> None:
+    """
+    Extracts raw samples and sends them via TCP instantly using pre-formatted string.
+    """
+    while not channel_queues[0].is_empty():
+        try:
+            msg = _JSON_FMT.format(
+                channel_queues[0].read(), channel_queues[1].read(),
+                channel_queues[2].read(), channel_queues[3].read(),
+                channel_queues[4].read(), channel_queues[5].read(),
+                channel_queues[6].read(), channel_queues[7].read()
+            )
+            sock.send(msg.encode('utf-8'))
+
+        except OSError as e:
+            # Handle EAGAIN (WiFi buffer full) without blocking
+            if e.args[0] == 11:
+                break
+            pass
+        except Exception:
+            pass
+
+########################################################################################################################
+#                                                        MAIN                                                          #
+########################################################################################################################
+
+def main() -> None:
+    global data_ready
+
+    if not do_connect(SSID, PASSWORD, board_led):
+        return
+
+    # ADS1299 HW Initialization
+    ads = ADS1299(cs, spi)
+    cf1 = make_config1(data_rate=ADS1299.SAMPLE_RATE_250)
+    cf3 = make_config3(pwr_down_refbuf=True)
+
+    ads.init(config1=cf1, config3=cf3)
+    ads.config_all_channels(channels_active=8, gain=ADS1299.GAIN_1, channel_input=ADS1299.NORMAL)
+
+    # TCP Socket setup
+    client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        client_sock.connect((SERVER_IP, SERVER_PORT))
+        # Disable Nagle's algorithm for zero TCP latency
+        client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        client_sock.setblocking(False)
+    except Exception:
+        print("Telemetry server unreachable.")
+
+    # Acquisition Pipeline
+    ads.enable_read_continuous()
+    drdy.irq(trigger=Pin.IRQ_FALLING, handler=irq_handler)
+
+    gc.collect()
+    last_gc = ticks_us()
+    ###################################################################################################################
+    #                                                       APP                                                       #
+    ###################################################################################################################
+    try:
+        while True:
+            # PRIORITY 1: Fetch hardware data
+            if data_ready:
+                data_ready = False
+                read_data(ads)
+
+            # PRIORITY 2: Dispatch telemetry
+            send_data(client_sock)
+
+            # Maintenance: Periodic GC every 2s
+            now = ticks_us()
+            if ticks_us() - last_gc > 2000000:
+                gc.collect()
+                last_gc = now
+
+    except KeyboardInterrupt:
+        print("Stopping high-speed telemetry...")
+    finally:
+        ads.disable_read_continuous()
+        drdy.irq(handler=None)
+        client_sock.close()
+
+if __name__ == "__main__":
+    main()
